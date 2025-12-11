@@ -16,7 +16,7 @@ const logger = winston.createLogger({
     winston.format.printf(info => `${info.timestamp} - ${info.level.toUpperCase()}: ${info.message}`)
   ),
   transports: [
-new winston.transports.File({ filename: '/tmp/logs.txt' }),
+    // Solo console en producción (Railway captura estos logs automáticamente)
     new winston.transports.Console()
   ]
 });
@@ -43,6 +43,12 @@ app.get('/', (req, res) => {
   res.send('Servidor Node Chat Logger activo');
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' });
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor escuchando en puerto ${PORT}`);
+  logger.info('Servidor iniciado correctamente');
 });
