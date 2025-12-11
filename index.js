@@ -5,10 +5,11 @@ import winston from 'winston';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// IMPORTANTE: Configurar middlewares ANTES de las rutas
 app.use(cors());
 app.use(express.json());
 
-// Configurar Winston para logs con timestamp
+// Configurar Winston solo con consola
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -16,9 +17,20 @@ const logger = winston.createLogger({
     winston.format.printf(info => `${info.timestamp} - ${info.level.toUpperCase()}: ${info.message}`)
   ),
   transports: [
-    // Solo console en producción (Railway captura estos logs automáticamente)
     new winston.transports.Console()
   ]
+});
+
+// PRIMERO: Endpoint raíz (el más importante para Railway)
+app.get('/', (req, res) => {
+  console.log('✓ Request recibida en /');
+  res.send('Servidor Node Chat Logger activo');
+});
+
+// Health check
+app.get('/health', (req, res) => {
+  console.log('✓ Health check');
+  res.status(200).json({ status: 'healthy' });
 });
 
 // Endpoint para registrar conversaciones
@@ -26,29 +38,35 @@ app.post('/log', (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: 'Falta el mensaje' });
 
-  // Obtener IP real (si hay proxy, usa el encabezado x-forwarded-for)
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-  // Obtener user-agent (navegador, sistema operativo)
   const userAgent = req.headers['user-agent'] || 'Desconocido';
 
-  // Registrar en log
   logger.info(`IP: ${ip} | User-Agent: ${userAgent} | Mensaje: ${message}`);
 
   res.json({ status: 'ok', message: 'Mensaje registrado' });
 });
 
-// Endpoint de prueba
-app.get('/', (req, res) => {
-  res.send('Servidor Node Chat Logger activo');
+// Iniciar servidor
+const server = app.listen(PORT, '0.0.0.0', (err) => {
+  if (err) {
+    console.error('❌ Error al iniciar servidor:', err);
+    process.exit(1);
+  }
+  console.log(`✓✓✓ Servidor escuchando en puerto ${PORT}`);
+  console.log(`✓ Listo para recibir requests`);
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'healthy' });
+// Manejar errores del servidor
+server.on('error', (error) => {
+  console.error('❌ Error del servidor:', error);
+  process.exit(1);
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Servidor escuchando en puerto ${PORT}`);
-  logger.info('Servidor iniciado correctamente');
+// Manejar señales de cierre
+process.on('SIGTERM', () => {
+  console.log('SIGTERM recibido, cerrando servidor...');
+  server.close(() => {
+    console.log('Servidor cerrado');
+    process.exit(0);
+  });
 });
